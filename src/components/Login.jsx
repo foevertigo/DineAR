@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { authAPI } from '../lib/apiClient'
 
-export default function Login() {
+export default function Login({ onLogin }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -14,16 +14,18 @@ export default function Login() {
     setError(null)
 
     try {
+      let response
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({ email, password })
-        if (error) throw error
-        alert('Check your email for confirmation link!')
+        response = await authAPI.signup(email, password)
+        alert('Account created successfully!')
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) throw error
+        response = await authAPI.login(email, password)
       }
-    } catch (error) {
-      setError(error.message)
+
+      // Update parent component with user data
+      onLogin(response.user)
+    } catch (err) {
+      setError(err.message || 'Authentication failed')
     } finally {
       setLoading(false)
     }
@@ -31,17 +33,17 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="card w-full max-w-md">
+      <div className="card w-full max-w-md fade-in">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-heading-1 text-teal-700 mb-2">
             dineAR
           </h1>
-          <p className="text-gray-600">AR Menu Visualization Platform</p>
+          <p className="text-slate-600">AR Menu Visualization Platform</p>
         </div>
 
         <form onSubmit={handleAuth} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+            <label className="label">Email</label>
             <input
               type="email"
               value={email}
@@ -49,23 +51,31 @@ export default function Login() {
               className="input-field"
               placeholder="your@email.com"
               required
+              disabled={loading}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+            <label className="label">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="input-field"
-              placeholder="••••••••"
+              placeholder={isSignUp ? "Min. 8 characters, 1 letter, 1 number" : "Your password"}
               required
+              disabled={loading}
+              minLength={8}
             />
+            {isSignUp && (
+              <p className="text-xs text-slate-500 mt-1">
+                Password must be at least 8 characters with 1 letter and 1 number
+              </p>
+            )}
           </div>
 
           {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">
+            <div className="alert-error">
               {error}
             </div>
           )}
@@ -75,13 +85,21 @@ export default function Login() {
             disabled={loading}
             className="btn-primary w-full"
           >
-            {loading ? 'Processing...' : isSignUp ? 'Sign Up' : 'Sign In'}
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <div className="spinner h-5 w-5 border-2"></div>
+                Processing...
+              </span>
+            ) : (
+              isSignUp ? 'Create Account' : 'Sign In'
+            )}
           </button>
         </form>
 
         <button
           onClick={() => setIsSignUp(!isSignUp)}
-          className="w-full mt-4 text-indigo-600 font-medium hover:underline"
+          className="w-full mt-4 text-teal-600 font-medium hover:underline"
+          disabled={loading}
         >
           {isSignUp ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
         </button>

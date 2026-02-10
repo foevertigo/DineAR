@@ -1,8 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { dishAPI } from '../lib/apiClient'
 import { PLATE_SIZES } from '../lib/arUtils'
-import { nanoid } from 'nanoid'
 
 export default function DishCapture() {
   const [step, setStep] = useState('info') // info, capture, processing
@@ -10,6 +9,7 @@ export default function DishCapture() {
   const [plateSize, setPlateSize] = useState('medium')
   const [capturedImage, setCapturedImage] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
@@ -17,20 +17,21 @@ export default function DishCapture() {
 
   const startCamera = async () => {
     try {
+      setError(null)
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' },
         audio: false
       })
-      
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         streamRef.current = stream
       }
-      
+
       setStep('capture')
-    } catch (error) {
-      console.error('Camera access error:', error)
-      alert('Could not access camera')
+    } catch (err) {
+      console.error('Camera access error:', err)
+      setError('Could not access camera. Please check permissions.')
     }
   }
 
@@ -43,7 +44,7 @@ export default function DishCapture() {
       canvas.width = video.videoWidth
       canvas.height = video.videoHeight
       context.drawImage(video, 0, 0)
-      
+
       canvas.toBlob((blob) => {
         setCapturedImage(blob)
         stopCamera()
@@ -65,46 +66,28 @@ export default function DishCapture() {
 
   const saveDish = async () => {
     if (!dishName.trim()) {
-      alert('Please enter a dish name')
+      setError('Please enter a dish name')
+      return
+    }
+
+    if (!capturedImage) {
+      setError('Please capture an image')
       return
     }
 
     setLoading(true)
+    setError(null)
 
     try {
-      const user = await supabase.auth.getUser()
-      if (!user.data.user) throw new Error('Not authenticated')
-
-      // Upload image to Supabase Storage (you can later migrate to R2)
-      const fileName = `${user.data.user.id}/${nanoid()}.jpg`
-      const { error: uploadError } = await supabase.storage
-        .from('dishes')
-        .upload(fileName, capturedImage)
-
-      if (uploadError) throw uploadError
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('dishes')
-        .getPublicUrl(fileName)
-
-      // Save dish metadata
-      const { error: dbError } = await supabase
-        .from('dishes')
-        .insert({
-          user_id: user.data.user.id,
-          name: dishName,
-          plate_size: plateSize,
-          thumbnail_url: publicUrl,
-          model_url: publicUrl, // In MVP, use same image; later replace with 3D model
-        })
-
-      if (dbError) throw dbError
+      await dishAPI.create(
+        { name: dishName, plateSize },
+        capturedImage
+      )
 
       navigate('/dashboard')
-    } catch (error) {
-      console.error('Error saving dish:', error)
-      alert('Failed to save dish: ' + error.message)
+    } catch (err) {
+      console.error('Error saving dish:', err)
+      setError(err.message || 'Failed to save dish')
     } finally {
       setLoading(false)
     }
@@ -120,27 +103,41 @@ export default function DishCapture() {
       {/* Header */}
       <div className="card mb-4">
         <div className="flex items-center gap-3">
-          <button onClick={handleBack} className="text-2xl">←</button>
-          <h1 className="text-xl font-bold text-gray-800">Add New Dish</h1>
+          <button
+            onClick={handleBack}
+            className="text-2xl text-slate-600 hover:text-slate-800 transition-colors"
+            aria-label="Go back"
+          >
+            ←
+          </button>
+          <h1 className="text-heading-3 text-slate-800">Add New Dish</h1>
         </div>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="alert-error mb-4">
+          {error}
+        </div>
+      )}
 
       {/* Step: Info */}
       {step === 'info' && (
         <div className="card space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Dish Name</label>
+            <label className="label">Dish Name</label>
             <input
               type="text"
               value={dishName}
               onChange={(e) => setDishName(e.target.value)}
               className="input-field"
               placeholder="e.g., Spicy Ramen"
+              maxLength={100}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Plate Size</label>
+            <label className="label">Plate Size</label>
             <select
               value={plateSize}
               onChange={(e) => setPlateSize(e.target.value)}
@@ -152,9 +149,9 @@ export default function DishCapture() {
             </select>
           </div>
 
-          <div className="bg-indigo-50 p-4 rounded-xl">
-            <p className="text-sm text-indigo-800">
-              📸 Position the dish fully on the plate within the camera frame. 
+          <div className="alert-info">
+            <p className="text-sm">
+              <strong>Tip:</strong> Position the dish fully on the plate within the camera frame.
               Ensure good lighting for best results.
             </p>
           </div>
@@ -176,7 +173,7 @@ export default function DishCapture() {
                 playsInline
                 className="w-full"
               />
-              
+
               {/* AR Guide Overlay */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="border-4 border-white/50 border-dashed rounded-full w-64 h-64"></div>
@@ -185,7 +182,7 @@ export default function DishCapture() {
           </div>
 
           <button onClick={capturePhoto} className="btn-primary w-full">
-            📸 Capture
+            Capture Photo
           </button>
         </div>
       )}
@@ -202,7 +199,11 @@ export default function DishCapture() {
           </div>
 
           <div className="flex gap-3">
-            <button onClick={retakePhoto} className="btn-secondary flex-1">
+            <button
+              onClick={retakePhoto}
+              className="btn-secondary flex-1"
+              disabled={loading}
+            >
               Retake
             </button>
             <button
@@ -210,7 +211,14 @@ export default function DishCapture() {
               disabled={loading}
               className="btn-primary flex-1"
             >
-              {loading ? 'Saving...' : 'Save Dish'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <div className="spinner h-5 w-5 border-2"></div>
+                  Saving...
+                </span>
+              ) : (
+                'Save Dish'
+              )}
             </button>
           </div>
         </div>

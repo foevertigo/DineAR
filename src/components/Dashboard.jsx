@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { authAPI, dishAPI } from '../lib/apiClient'
 import DishCard from './DishCard'
 
-export default function Dashboard() {
+export default function Dashboard({ onLogout }) {
   const [dishes, setDishes] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -14,70 +15,84 @@ export default function Dashboard() {
 
   const fetchDishes = async () => {
     try {
-      const { data, error } = await supabase
-        .from('dishes')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      setDishes(data || [])
-    } catch (error) {
-      console.error('Error fetching dishes:', error)
+      setLoading(true)
+      const response = await dishAPI.list()
+      setDishes(response.dishes || [])
+    } catch (err) {
+      setError(err.message)
+      console.error('Error fetching dishes:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
+  const handleSignOut = () => {
+    authAPI.logout()
+    onLogout()
   }
 
   const handleDelete = async (dishId) => {
-    if (!confirm('Delete this dish?')) return
+    if (!confirm('Are you sure you want to delete this dish?')) return
 
     try {
-      const { error } = await supabase
-        .from('dishes')
-        .delete()
-        .eq('id', dishId)
-
-      if (error) throw error
-      setDishes(dishes.filter(d => d.id !== dishId))
-    } catch (error) {
-      console.error('Error deleting dish:', error)
-      alert('Failed to delete dish')
+      await dishAPI.delete(dishId)
+      setDishes(dishes.filter(d => d._id !== dishId))
+    } catch (err) {
+      console.error('Error deleting dish:', err)
+      alert('Failed to delete dish: ' + err.message)
     }
   }
 
   return (
     <div className="min-h-screen p-4 pb-24">
       {/* Header */}
-      <div className="card mb-6">
+      <div className="card mb-6 slide-up">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">Your Menu</h1>
-            <p className="text-gray-600 text-sm">{dishes.length} dishes</p>
+            <h1 className="text-heading-2 text-slate-800">Your Menu</h1>
+            <p className="text-small text-slate-600 mt-1">
+              {dishes.length} {dishes.length === 1 ? 'dish' : 'dishes'}
+            </p>
           </div>
-          <button onClick={handleSignOut} className="text-red-600 font-medium">
+          <button
+            onClick={handleSignOut}
+            className="text-red-600 font-medium hover:text-red-700 transition-colors"
+          >
             Sign Out
           </button>
         </div>
       </div>
 
-      {/* Dishes Grid */}
+      {/* Error State */}
+      {error && (
+        <div className="alert-error mb-6">
+          {error}
+        </div>
+      )}
+
+      {/* Loading State */}
       {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent"></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="card">
+              <div className="skeleton h-48 mb-4"></div>
+              <div className="skeleton h-6 mb-2"></div>
+              <div className="skeleton h-4 w-24"></div>
+            </div>
+          ))}
         </div>
       ) : dishes.length === 0 ? (
+        /* Empty State */
         <div className="card text-center py-12">
-          <p className="text-gray-500 mb-4">No dishes yet</p>
-          <p className="text-sm text-gray-400">Tap the + button to add your first dish</p>
+          <div className="text-6xl mb-4">🍽️</div>
+          <p className="text-slate-600 mb-2 font-medium">No dishes yet</p>
+          <p className="text-sm text-slate-400">Tap the add button to create your first dish</p>
         </div>
       ) : (
+        /* Dishes Grid */
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {dishes.map(dish => (
-            <DishCard key={dish.id} dish={dish} onDelete={handleDelete} />
+            <DishCard key={dish._id} dish={dish} onDelete={handleDelete} />
           ))}
         </div>
       )}
@@ -85,7 +100,11 @@ export default function Dashboard() {
       {/* Floating Add Button */}
       <button
         onClick={() => navigate('/capture')}
-        className="fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-full shadow-2xl flex items-center justify-center text-3xl hover:scale-110 transition-transform duration-200"
+        className="fixed bottom-6 right-6 w-16 h-16 bg-teal-700 text-white rounded-full shadow-lg flex items-center justify-center text-3xl hover:bg-teal-600 hover:shadow-xl transition-all duration-200"
+        style={{ transform: 'translateY(0)' }}
+        onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)'}
+        onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0) scale(1)'}
+        aria-label="Add new dish"
       >
         +
       </button>

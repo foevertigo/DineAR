@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { dishAPI } from '../lib/apiClient'
 import { Canvas } from '@react-three/fiber'
 import { ARButton, XR } from '@react-three/xr'
 import { getScaleFactor, isARSupported } from '../lib/arUtils'
@@ -48,19 +48,11 @@ export default function ARViewer() {
 
   const fetchDish = async () => {
     try {
-      const { data, error } = await supabase
-        .from('dishes')
-        .select('*')
-        .eq('id', dishId)
-        .single()
-
-      if (error) throw error
-      if (!data) throw new Error('Dish not found')
-      
-      setDish(data)
-    } catch (error) {
-      console.error('Error fetching dish:', error)
-      setError(error.message)
+      const response = await dishAPI.get(dishId)
+      setDish(response.dish)
+    } catch (err) {
+      console.error('Error fetching dish:', err)
+      setError(err.message || 'Failed to load dish')
     } finally {
       setLoading(false)
     }
@@ -69,7 +61,7 @@ export default function ARViewer() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent"></div>
+        <div className="spinner h-12 w-12"></div>
       </div>
     )
   }
@@ -78,8 +70,8 @@ export default function ARViewer() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="card text-center">
-          <p className="text-red-600 mb-4">❌ {error || 'Dish not found'}</p>
-          <a href="/" className="text-indigo-600 font-medium">Go Home</a>
+          <p className="text-red-600 mb-4 font-medium">{error || 'Dish not found'}</p>
+          <a href="/" className="text-teal-600 font-medium hover:underline">Go Home</a>
         </div>
       </div>
     )
@@ -89,12 +81,12 @@ export default function ARViewer() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="card text-center">
-          <h2 className="text-2xl font-bold mb-4">⚠️ AR Not Supported</h2>
-          <p className="text-gray-600 mb-6">
+          <h2 className="text-heading-2 mb-4">AR Not Supported</h2>
+          <p className="text-slate-600 mb-6">
             Your browser doesn't support WebXR. Please use Chrome on Android.
           </p>
           <img
-            src={dish.thumbnail_url || dish.model_url}
+            src={dish.thumbnailUrl || dish.modelUrl}
             alt={dish.name}
             className="w-full rounded-xl mb-4"
           />
@@ -104,7 +96,7 @@ export default function ARViewer() {
     )
   }
 
-  const scale = getScaleFactor(dish.plate_size)
+  const scale = getScaleFactor(dish.plateSize)
 
   return (
     <div className="min-h-screen relative">
@@ -112,7 +104,7 @@ export default function ARViewer() {
       <div className="absolute top-0 left-0 right-0 z-10 p-4">
         <div className="card">
           <h2 className="font-bold text-lg">{dish.name}</h2>
-          <p className="text-sm text-gray-600">Tap "Start AR" to view</p>
+          <p className="text-sm text-slate-600">Tap "Start AR" to view</p>
         </div>
       </div>
 
@@ -126,7 +118,7 @@ export default function ARViewer() {
           <ambientLight intensity={1} />
           <pointLight position={[10, 10, 10]} />
           <DishModel
-            imageUrl={dish.model_url || dish.thumbnail_url}
+            imageUrl={dish.modelUrl || dish.thumbnailUrl}
             scale={scale}
           />
         </XR>
