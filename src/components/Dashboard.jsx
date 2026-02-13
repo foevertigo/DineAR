@@ -43,6 +43,26 @@ export default function Dashboard({ onLogout }) {
     }
   }
 
+  // Simple mobile detection
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || window.opera
+      // Regex for mobile devices
+      if (/android/i.test(userAgent) || /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+        setIsMobile(true)
+      } else {
+        // Also check screen width as fallback for responsiveness
+        setIsMobile(window.innerWidth < 768)
+      }
+    }
+
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
   return (
     <div className="min-h-screen p-4 pb-24">
       {/* Header */}
@@ -86,7 +106,11 @@ export default function Dashboard({ onLogout }) {
         <div className="card text-center py-12">
           <div className="text-6xl mb-4">🍽️</div>
           <p className="text-slate-600 mb-2 font-medium">No dishes yet</p>
-          <p className="text-sm text-slate-400">Tap the add button to create your first dish</p>
+          {isMobile ? (
+            <p className="text-sm text-slate-400">Tap the add button to create your first dish</p>
+          ) : (
+            <p className="text-sm text-slate-400">Switch to mobile to add dishes</p>
+          )}
         </div>
       ) : (
         /* Dishes Grid */
@@ -97,17 +121,19 @@ export default function Dashboard({ onLogout }) {
         </div>
       )}
 
-      {/* Floating Add Button */}
-      <button
-        onClick={() => navigate('/capture')}
-        className="fixed bottom-6 right-6 w-16 h-16 bg-teal-700 text-white rounded-full shadow-lg flex items-center justify-center text-3xl hover:bg-teal-600 hover:shadow-xl transition-all duration-200"
-        style={{ transform: 'translateY(0)' }}
-        onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)'}
-        onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0) scale(1)'}
-        aria-label="Add new dish"
-      >
-        +
-      </button>
+      {/* Floating Add Button - Only visible on Mobile */}
+      {isMobile && (
+        <button
+          onClick={() => navigate('/capture')}
+          className="fixed bottom-6 right-6 w-16 h-16 bg-teal-700 text-white rounded-full shadow-lg flex items-center justify-center text-3xl hover:bg-teal-600 hover:shadow-xl transition-all duration-200"
+          style={{ transform: 'translateY(0)' }}
+          onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)'}
+          onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0) scale(1)'}
+          aria-label="Add new dish"
+        >
+          +
+        </button>
+      )}
     </div>
   )
 }

@@ -44,9 +44,16 @@ app.use(cors({
         // Allow requests with no origin (mobile apps, Postman, etc.)
         if (!origin) return callback(null, true);
 
+        // In development, allow all origins (easier for testing with mobile/network IPs)
+        if (process.env.NODE_ENV === 'development') {
+            return callback(null, true);
+        }
+
+        // In production, check against allowed origins
         if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
+            console.log('Blocked by CORS:', origin); // Log the blocked origin for debugging
             callback(new Error('Not allowed by CORS'));
         }
     },
