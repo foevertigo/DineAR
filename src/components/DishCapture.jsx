@@ -19,13 +19,24 @@ export default function DishCapture() {
     try {
       setError(null)
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        },
         audio: false
       })
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         streamRef.current = stream
+
+        // Ensure video plays after stream is set
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current.play().catch(err => {
+            console.error('Video play error:', err)
+          })
+        }
       }
 
       setStep('capture')
@@ -166,12 +177,14 @@ export default function DishCapture() {
       {step === 'capture' && (
         <div className="space-y-4">
           <div className="card p-0 overflow-hidden">
-            <div className="relative bg-black">
+            <div className="relative bg-black" style={{ minHeight: '400px' }}>
               <video
                 ref={videoRef}
                 autoPlay
                 playsInline
-                className="w-full"
+                muted
+                className="w-full h-full object-cover"
+                style={{ minHeight: '400px' }}
               />
 
               {/* AR Guide Overlay */}
